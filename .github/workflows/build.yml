@@ -16,7 +16,7 @@ env:
 jobs:
   build:        
     runs-on: ubuntu-latest
-    container: locietta/loia-dev-base:latest
+    container: archlinux/archlinux:base-devel
     outputs:
       current_version: ${{ steps.out.outputs.current_version }}
       release_version: ${{ steps.out.outputs.release_version }}
@@ -42,7 +42,7 @@ jobs:
     - name: Install dependencies
       id: dep
       run: |
-        pacman -Syu --noconfirm pahole xmlto inetutils bc cpio jq ccache go
+        pacman -Syu --noconfirm pahole xmlto inetutils bc cpio jq ccache git python go
         GOBIN=/usr/bin go install go.chromium.org/luci/cipd/client/cmd/...@latest
         cipd install fuchsia/third_party/clang/linux-amd64 latest -root /usr/local/fuchsia-clang
         echo "PATH=/usr/local/fuchsia-clang/bin:$PATH" >> $GITHUB_ENV
@@ -50,12 +50,6 @@ jobs:
     - name: Trust this directory
       run: git config --global --add safe.directory '*' # v2.35.3 or later
  
-    - name: Initialize ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 2048M
-        key: ${{ github.job }}-${{ matrix.arch }}
-       
     - name: Prepare source code
       shell: bash
       run: |
@@ -87,6 +81,13 @@ jobs:
           echo "REBUILD_FLAG=" | tee -a $GITHUB_ENV
         fi
 
+    - name: Initialize ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      if: ${{ env.REBUILD_FLAG }}
+      with:
+        max-size: 2048M
+        key: ${{ github.job }}-${{ matrix.arch }}
+
     - name: Build kernel
       if: ${{ env.REBUILD_FLAG }}
       run: |
@@ -113,6 +114,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      contents: write
 
     steps:
     - uses: actions/checkout@main
@@ -152,6 +155,6 @@ jobs:
           
         files: |
           release_images/*/*
-        token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+        token: ${{ secrets.GITHUB_TOKEN }}
         # generate_release_notes: true
         fail_on_unmatched_files: true
